@@ -8,7 +8,7 @@ app = FastAPI()
 
 @app.get("/")
 def home():
-  return {"message It is working"}
+  return {"message It is working! yes"}
 
 # app.add_middleware(
 #     CORSMiddleware,
