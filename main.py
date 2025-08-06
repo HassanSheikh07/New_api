@@ -2,18 +2,18 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 import requests
 import re
-from fastapi.middleware.cors import CORSMiddleware
+# from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://testingmarmorkrafts.store"],  
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["https://testingmarmorkrafts.store"],  
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 # WooCommerce API credentials
 WC_API_URL = "https://marmorkrafts.com/wp-json/wc/v3"
