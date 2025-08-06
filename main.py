@@ -23,11 +23,12 @@ WC_API_URL = "https://marmorkrafts.com/wp-json/wc/v3"
 WC_CONSUMER_KEY = "ck_fb05462837d9679c0f6c8b11ccbac57d09c79638"
 WC_CONSUMER_SECRET = "cs_cd485ed45fc41da284d567e0d49cb8a272fbe4f1"
 
-# Utility to strip HTML tags
+
+
 def strip_html(text: str) -> str:
     return re.sub(r'<[^>]*>', '', text or '')
 
-# Utility to get product variations
+# Slow variation fetch (called only if include_variations=True)
 def get_variations(product_id: int):
     url = f"{WC_API_URL}/products/{product_id}/variations?per_page=50"
     response = requests.get(url, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET))
@@ -44,9 +45,13 @@ def get_variations(product_id: int):
         })
     return variation_list
 
-
 @app.get("/products")
-def get_products(query: str = "", color: str = "", exclude_marble: bool = False):
+def get_products(
+    query: str = "",
+    color: str = "",
+    exclude_marble: bool = False,
+    include_variations: bool = False  # ⚠️ default to False for performance
+):
     fetch_url = f"{WC_API_URL}/products?search={query}&per_page=50"
     response = requests.get(fetch_url, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET))
 
@@ -62,34 +67,38 @@ def get_products(query: str = "", color: str = "", exclude_marble: bool = False)
         short_desc = item.get("short_description", "").lower()
         long_desc = strip_html(item.get("description", "")).lower()
 
-        # Skip if marble filter is on
+        # Marble exclusion
         if exclude_marble and "marble" in f"{name} {short_desc} {long_desc}":
             continue
 
-        # Get product variations
-        variations = get_variations(item["id"])
+        # Shape filtering if explicitly mentioned
+        shapes = ["rectangular", "square", "round", "set", "oval", "triangle", "chess set"]
+        explicit_shape = next((shape for shape in shapes if shape in query_lower), None)
+        if explicit_shape and explicit_shape not in name:
+            continue
 
-        # Filter by color if specified
+        # Fetch variations only if requested
+        variations = get_variations(item["id"]) if include_variations else []
+
+        # Color filtering
         if color:
             variations = [
                 v for v in variations
                 if any(attr["name"].lower() == "color" and attr["option"].lower() == color.lower()
                        for attr in v.get("attributes", []))
             ]
-            if not variations:
+            if not variations and include_variations:
                 continue
 
-        # Dynamic scoring logic
+        # Dynamic scoring
         score = 0
         full_text = f"{name} {short_desc} {long_desc}"
 
-        # Full phrase match boost
         if query_lower in name:
             score += 5
         elif query_lower in full_text:
             score += 3
 
-        # Word-by-word matching
         matched_words = 0
         for word in query_lower.split():
             if word in name:
@@ -102,11 +111,10 @@ def get_products(query: str = "", color: str = "", exclude_marble: bool = False)
                 score += 0.5
                 matched_words += 1
 
-        # Skip products with low match coverage
         if matched_words < len(query_lower.split()) / 2:
             continue
 
-        # Append product with score
+        # Build result
         products.append({
             "name": item["name"],
             "url": item["permalink"],
@@ -117,10 +125,9 @@ def get_products(query: str = "", color: str = "", exclude_marble: bool = False)
             "score": score
         })
 
-    # Sort by relevance
+    # Sort and return
     products.sort(key=lambda x: x["score"], reverse=True)
 
-    # Return top results
     if not products:
         return {
             "message": "No matching products found. Try another keyword or adjust your filters.",
@@ -129,8 +136,37 @@ def get_products(query: str = "", color: str = "", exclude_marble: bool = False)
 
     return {
         "message": f"{len(products)} matching products found.",
-        "products": products[:10]  # Return top 10
+        "products": products[:10]
     }
+
+
+
+
+
+
+# Utility to strip HTML tags
+# def strip_html(text: str) -> str:
+#     return re.sub(r'<[^>]*>', '', text or '')
+
+# # Utility to get product variations
+# def get_variations(product_id: int):
+#     url = f"{WC_API_URL}/products/{product_id}/variations?per_page=50"
+#     response = requests.get(url, auth=(WC_CONSUMER_KEY, WC_CONSUMER_SECRET))
+#     if response.status_code != 200:
+#         return []
+#     variations = response.json()
+#     variation_list = []
+#     for v in variations:
+#         variation_list.append({
+#             "id": v["id"],
+#             "price": v.get("price"),
+#             "attributes": v.get("attributes", []),
+#             "image": v["image"]["src"] if v.get("image") else None
+#         })
+#     return variation_list
+
+
+
 
 # @app.get("/products")
 # def get_products(query: str = "", color: str = "", exclude_marble: bool = False):
